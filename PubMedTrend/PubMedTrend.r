@@ -1,7 +1,6 @@
 require("RCurl")
 require("XML")
 require("plyr")
-require("ggplot2")
 
 ########################
 # Download PubMed Data #
@@ -11,13 +10,14 @@ PubMedTrend <- function(query, yrStart=1950, yrMax=2009) {
   
   ### Some error checking ###
   if (is.numeric(yrStart) == FALSE || is.numeric(yrMax) == FALSE) stop("One of the year values is not numeric")
-  if (yrStart < 1800) stop(paste("Sure you want to look for hits from the 18th century (yrStart = " ,yrStart, ")?\n", sep=""))
+  if (yrStart < 1800) stop(paste("Sure you want to look for citations from the 18th century (yrStart = " ,yrStart, ")?\n", sep=""))
   this.year <- Sys.time()
   this.year <- as.integer(format(this.year, "%Y"))
   if (yrMax > this.year) stop(paste("Are you from the future? Please check your year interval; yrMax =",yrMax,"\n"))
   if (yrMax < yrStart) stop("yrMax is smaller than yrMin!")
   
   ### Start main search function ###
+  curl = getCurlHandle() # reuse curl-connection
   getCount <- function(query.term) {
     # convert spaces to '+'
     query.gsub <- gsub(" ", "+", query.term)
@@ -32,14 +32,14 @@ PubMedTrend <- function(query, yrStart=1950, yrMax=2009) {
     cat("Searching for: ", query.term,"\n")
     
     # Start retrieval loop
-    for(i in yrStart:yrMax) {
+     for(i in yrStart:yrMax) {
       # tell progressbar how it's going
       setTxtProgressBar(pb, i)
       # add publication date [dp] to query
       query.parsed <- paste(query.gsub, "+AND+",i, "%5Bppdat%5D", sep="")
       # Get XML with number of hits for query.parsed
       pub.esearch <- getURL(paste("http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&rettype=count&term=", 
-                                  query.parsed, sep = ""))
+                                  query.parsed, sep = ""), curl=curl)
       # Parse XML
       pub.esearch <- xmlTreeParse(pub.esearch, asText = TRUE)
       # Get number of hits from XML
@@ -63,8 +63,8 @@ PubMedTrend <- function(query, yrStart=1950, yrMax=2009) {
   match <- match(df$year, total.table$year)
   # add total count
   df$total_count <- total.table$total_count[match]
-  # compute relative count times 10 000, i.e. show number of matches per 1 million PubMed citations
-  df$relative <- (df$count / df$total_count) * 10000
+  # compute relative count as the number of hits per 100k PubMed citations
+  df$relative <- (df$count / df$total_count) * 100000
   cat("\nAll done!")
   return(df)
 }
