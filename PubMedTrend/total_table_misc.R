@@ -10,7 +10,7 @@ names(total_table) <- c("year","total_count")
 total_table$year <- gsub("\\*","",total_table$year)
 total_table$total_count <- gsub(",","",total_table$total_count)
 total_table$total_count <- as.numeric(total_table$total_count)
-save(total_table, file="total_table")
+write.csv(total_table, file="total_table.csv", row.names=FALSE)
 
 
 # Get updated total values by quering PubMed API --------------------------------------------------
@@ -47,8 +47,7 @@ getTotalUpdated <- function(yrStart=1950, yrMax=2012) {
   return(df)
 }
 total_table_updated <- getTotalUpdated(1947,2012)
-save(file="total_table_updated", total_table_updated)
-
+write.csv(total_table_updated, file="total_table_updated.csv", row.names=FALSE)
 
 # compare counts from table with counts from my script -----------------------------------------
 load(file="total_table")
