@@ -57,14 +57,16 @@ PubMedTrend <- function(query, yrStart=1950, yrMax=2009) {
   df <- ldply(query, getCount)
   
   ### Calculate relative frequencies ###
-  # load file with pubmed total citations from 1947-2009
-  load(file="total_table")
+  # load file with pubmed total citations from 1947-2012
+  # from: http://www.nlm.nih.gov/bsd/medline_cit_counts_yr_pub.html
+  tmp <- getURL("https://raw.github.com/rpsychologist/PubMed/master/PubMedTrend/total_table.csv")
+  total.table <- read.csv(text=tmp)
   # match year
   match <- match(df$year, total.table$year)
   # add total count
   df$total_count <- total.table$total_count[match]
-  # compute relative count as the number of hits per 100k PubMed citations
-  df$relative <- (df$count / df$total_count) * 100000
+  # relative count in percentages
+  df$relative <- (df$count / df$total_count) * 100
   cat("\nAll done!")
   return(df)
 }
