@@ -32,27 +32,17 @@ searchPubmed <- function(query.term) {
   # Calculate how many itterations will be needed
   Runs <- (pub.count %/% 10000) + 1
   # Create empty object
-  pub.efetch <- NULL
+  pub.efetch <- list(NULL)
   # Loop to batch download
   for (i in 1:Runs) { 
     # Download XML based on hits saved in pub.esearch (WebEnv)
-    x <- getURL(paste("http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&WebEnv=",
+    tmp <- getURL(paste("http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&WebEnv=",
                       pub.esearch,"&query_key=1&retmode=xml&retstart=", RetStart, "&retmax=", RetMax, sep = ""))
-    # *** here be dragons! ***
-    # Remove XML declarations, else it wont parse correctly later, since different gets are being pasted together. 
-    # This is probably quick-and-dirty, perhaps it could be done more elegantly with the XML-package
-    x <- gsub("<.xml version=\"1\\.0\".>\n<!DOCTYPE PubmedArticleSet PUBLIC \"-//NLM//DTD PubMedArticle, 1st January
-                   2013//EN\"\"http://www\\.ncbi\\.nlm\\.nih\\.gov/corehtml/query/DTD/pubmed_130101\\.dtd\">\n", "", x)
-    x <- gsub("<PubmedArticleSet>\n", "", x)
-    x <- gsub("\n</PubmedArticleSet>\n", "", x)
-    # Add data to previous downloads
-    pub.efetch <- paste(pub.efetch, x, sep="")
-    # Increase range for next batch
+    pub.efetch[i] <- tmp
     RetStart <- RetStart + 10000
     RetMax <- RetMax + 10000
   }
-  # Add tags to create valid XML
-  pub.efetch <- paste("<PubmedArticleSet>\n",pub.efetch,"</PubmedArticleSet>\n")
+
   # Print that download is completed
   cat("Completed download from PubMed.\n")
   # Return XML
@@ -61,10 +51,13 @@ searchPubmed <- function(query.term) {
 
 # Function to extract journal name from individual article
 extractJournal <- function(query.term = query) {
-  # Parse XML into XML Tree
-  xml.data <- xmlTreeParse(pub.efetch, useInternalNodes = TRUE)
-  # Use xpathSApply to extract Journal name
-  journal <- xpathSApply(xml.data, "//PubmedArticle/MedlineCitation/MedlineJournalInfo/MedlineTA", xmlValue)
+  tmp <- lapply(1:length(pub.efetch), function(i) {
+    # Parse XML into XML Tree
+    xml.data <- xmlTreeParse(pub.efetch[[i]], useInternalNodes = TRUE)
+    # Use xpathSApply to extract Journal name
+    xpathSApply(xml.data, "//PubmedArticle/MedlineCitation/MedlineJournalInfo/MedlineTA", xmlValue)
+   })
+  journal <- unlist(tmp)
   # Show how many journals that were extracted
   cat("Extracted ", length(journal), " hits (",(length(journal)/pub.count)*100," %) from a total of ",
       pub.count," hits. For query named: ", query.term,"\n", sep="")
