@@ -132,7 +132,7 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
 #' Get journal titles
 #'
 #' @param min cut results at minimum number of articles
-#' @return a table
+#' @return a data frame
 #' @example
 #' # Years of publication for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
@@ -143,17 +143,21 @@ pubmed_journals <- function(dir, min = 3) {
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/MedlineCitation/Article/"
-    xpathSApply(pub, paste0(pre, "Journal/ISOAbbreviation"), xmlValue)
+    tbl = xpathSApply(pub, paste0(pre, "Journal/ISOAbbreviation"), xmlValue)
+    tbl = table(tbl)[ table(tbl) > min ]
+    data.frame(journal = names(tbl), count = tbl)
   })
-  tbl = as.data.frame(table(tbl)[ table(tbl) > min ])
-  return(tbl[ order(-tbl), ])
+  print(tbl)
+  tbl = rbind.fill(tbl)
+  tbl = aggregate(count ~ journal, sum, data = tbl)
+  return(tbl[ order(-tbl$count), ])
   
 }
 
 #' Get years of publication
 #'
 #' @param min cut results at minimum number of articles
-#' @return a table
+#' @return a data frame
 #' @example
 #' # Years of publication for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
@@ -164,9 +168,11 @@ pubmed_years <- function(dir, min = 3) {
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/MedlineCitation/Article/"
-    xpathSApply(pub, paste0(pre, "Journal/JournalIssue/PubDate/Year"), xmlValue)
+    tbl = xpathSApply(pub, paste0(pre, "Journal/JournalIssue/PubDate/Year"), xmlValue)
+    tbl = table(tbl)[ table(tbl) > min ]
+    data.frame(year = names(tbl), count = tbl)
   })
-  tbl = table(tbl)[ table(tbl) > min ]
-  return(tbl)
+  tbl = rbind.fill(tbl)
+  return(aggregate(count ~ year, sum, data = tbl))
   
 }
