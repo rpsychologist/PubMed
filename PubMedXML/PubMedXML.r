@@ -144,7 +144,7 @@ pubmed_journals <- function(dir, min = 3) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/MedlineCitation/Article/"
     tbl = xpathSApply(pub, paste0(pre, "Journal/ISOAbbreviation"), xmlValue)
-    tbl = table(tbl)[ table(tbl) > min ]
+    tbl = table(tbl)[ table(tbl) >= min ]
     data.frame(journal = names(tbl), count = tbl)
   })
   print(tbl)
@@ -162,17 +162,71 @@ pubmed_journals <- function(dir, min = 3) {
 #' # Years of publication for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # pubmed_years("pubmed_fctc", 0)
-pubmed_years <- function(dir, min = 3) {
+pubmed_years <- function(dir, min = 0) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/PubmedData/History/"
     tbl = xpathSApply(pub, paste0(pre, "PubMedPubDate[@PubStatus='medline']/Year"), xmlValue)
-    tbl = table(tbl)[ table(tbl) > min ]
+    tbl = table(tbl)[ table(tbl) >= min ]
     data.frame(year = names(tbl), count = tbl)
   })
   tbl = rbind.fill(tbl)
   return(aggregate(count ~ year, sum, data = tbl))
   
 }
+
+#' Get number of authors
+#'
+#' @param min cut results at minimum number of articles
+#' @return a data frame
+#' @example
+#' # Years of publication for articles on the WHO FCTC (not run).
+#' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
+#' # pubmed_authors("pubmed_fctc", 0)
+pubmed_authors <- function(dir, min = 0) {
+  
+  tbl = file.path(dir, dir(dir, ".xml"))
+  tbl = lapply(tbl, function(x) {
+    pub = xmlTreeParse(x, useInternalNodes = TRUE)
+    tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article")
+    tbl = lapply(tbl, xpathApply, "AuthorList/Author/LastName")
+    tbl = as.vector(sapply(tbl, length))
+    tbl = table(tbl)[ table(tbl) >= min ]
+    data.frame(authors = names(tbl), count = tbl, stringsAsFactors = FALSE)
+  })
+  tbl = rbind.fill(tbl)
+  tbl = aggregate(count ~ authors, sum, data = tbl)
+  tbl$authors = factor(tbl$authors, levels = 0:max(as.numeric(tbl$authors)))
+  return(tbl[ order(tbl$authors), ])
+  
+}
+
+#' Get counts of authors (by name)
+#'
+#' @param min cut results at minimum number of articles
+#' @return a data frame
+#' @example
+#' # Years of publication for articles on the WHO FCTC (not run).
+#' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
+#' # pubmed_names("pubmed_fctc", 6)
+pubmed_names <- function(dir, min = 0) {
+  
+  tbl = file.path(dir, dir(dir, ".xml"))
+  tbl = lapply(tbl, function(x) {
+    pub = xmlTreeParse(x, useInternalNodes = TRUE)
+    tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article")
+    last = lapply(tbl, xpathSApply, "AuthorList/Author/LastName", xmlValue)
+    init = lapply(tbl, xpathSApply, "AuthorList/Author/Initials", xmlValue)
+    stopifnot(length(unlist(last)) == length(unlist(init)))
+    tbl = paste(unlist(last), substr(unlist(init), 1, 1))
+    tbl = table(tbl)[ table(tbl) >= min ]
+    data.frame(author = names(tbl), count = tbl, stringsAsFactors = FALSE)
+  })
+  tbl = rbind.fill(tbl)
+  tbl = aggregate(count ~ author, sum, data = tbl)
+  return(tbl[ order(-tbl$count), ])
+  
+}
+
