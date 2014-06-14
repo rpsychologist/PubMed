@@ -134,7 +134,7 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
 #' @param min cut results at minimum number of articles
 #' @return a data frame
 #' @example
-#' # Years of publication for articles on the WHO FCTC (not run).
+#' # Journal titles for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # pubmed_journals("pubmed_fctc")
 pubmed_journals <- function(dir, min = 3) {
@@ -182,7 +182,7 @@ pubmed_years <- function(dir, min = 0) {
 #' @param min cut results at minimum number of articles
 #' @return a data frame
 #' @example
-#' # Years of publication for articles on the WHO FCTC (not run).
+#' # Number of authors for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # pubmed_authors("pubmed_fctc", 0)
 pubmed_authors <- function(dir, min = 0) {
@@ -208,7 +208,7 @@ pubmed_authors <- function(dir, min = 0) {
 #' @param min cut results at minimum number of articles
 #' @return a data frame
 #' @example
-#' # Years of publication for articles on the WHO FCTC (not run).
+#' # Names of authors for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # pubmed_names("pubmed_fctc", 6)
 pubmed_names <- function(dir, min = 0) {
@@ -227,6 +227,54 @@ pubmed_names <- function(dir, min = 0) {
   tbl = rbind.fill(tbl)
   tbl = aggregate(count ~ author, sum, data = tbl)
   return(tbl[ order(-tbl$count), ])
+  
+}
+
+#' Get undirected edge list of coauthors
+#'
+#' The weights are Newman-Fowler (inversely proportional to number of coauthors).
+#' @return a data frame with three columns (sender, receiver, weight)
+#' @example
+#' # Network of authors on the WHO FCTC (not run).
+#' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
+#' # n = pubmed_edges("pubmed_fctc")
+#' # Plot with network package (install first).
+#' # require(network)
+#' # plot(network(n[ 1:2 ], directed = FALSE))
+pubmed_edges <- function(dir) {
+  
+  tbl = file.path(dir, dir(dir, ".xml"))
+  tbl = lapply(tbl, function(x) {
+    pub = xmlTreeParse(x, useInternalNodes = TRUE)
+    tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation")
+    tbl = lapply(tbl, function(x) {
+      y = paste(xpathSApply(x, "Article/AuthorList/Author/LastName", xmlValue),
+                xpathSApply(x, "Article/AuthorList/Author/Initials", xmlValue))
+      if(length(y) > 1) {
+        y = expand.grid(y, y)
+        y = subset(y, Var1 != Var2) # self-loops
+        y = unique(apply(y, 1, function(x) paste(sort(x), collapse = ",")))
+        y = ldply(strsplit(y, ","))
+        y = data.frame(xpathApply(x, "PMID", xmlValue), y, 1 / nrow(y))
+        names(y) = c("pmid", "i", "j", "w")
+      } else {
+        y = data.frame()
+      }
+      return(y)
+    })
+    tbl = rbind.fill(tbl)
+    write.csv(tbl, gsub("xml", "csv", x))
+    return(tbl)
+  })
+  tbl = rbind.fill(tbl)
+  tbl$uid = apply(tbl[, 2:3], 1, function(x) paste(sort(x), collapse = ","))
+  
+  # Newman-Fowler weights
+  tbl = merge(tbl, aggregate(w ~ uid, sum, data = tbl), by = "uid")
+  tbl = unique(tbl[, c("i", "j", "w.y") ])
+  names(tbl)[3] = "w"
+
+  return(tbl)
   
 }
 
