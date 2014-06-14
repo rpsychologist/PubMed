@@ -235,12 +235,25 @@ pubmed_names <- function(dir, min = 0) {
 #' The weights are Newman-Fowler (inversely proportional to number of coauthors).
 #' @return a data frame with three columns (sender, receiver, weight)
 #' @example
-#' # Network of authors on the WHO FCTC (not run).
+#' # # Network of authors on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # n = pubmed_edges("pubmed_fctc")
-#' # Plot with network package (install first).
+#' 
+#' # # Plot with network package (install first; not run).
 #' # require(network)
 #' # plot(network(n[ 1:2 ], directed = FALSE))
+#' 
+#' # # Plot with ggnet (install devtools package first; not run).
+#' 
+#' # net = network(n[, 1:2])
+#' # net %e% "w" = n[, 3] / max(n[ , 3])
+#' # net %e% "q" = as.numeric(cut(net %e% "w", quantile(net %e% "w"), include.lowest = TRUE)) / 4
+#' # require(devtools)
+#' # source_url("https://raw.githubusercontent.com/briatte/ggnet/master/ggnet.R")
+#' # ggnet(net, segment.alpha = net %e% "q",
+#' #       segment.color = "black", size = 1) + 
+#' #   geom_text(label = ifelse(degree(net) > quantile(degree(net), .9),
+#' #                            network.vertex.names(net), NA), size = 4)
 pubmed_edges <- function(dir) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
