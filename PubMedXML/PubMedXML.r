@@ -167,8 +167,8 @@ pubmed_years <- function(dir, min = 3) {
   tbl = file.path(dir, dir(dir, ".xml"))
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
-    pre = "//PubmedArticle/MedlineCitation/Article/"
-    tbl = xpathSApply(pub, paste0(pre, "Journal/JournalIssue/PubDate/Year"), xmlValue)
+    pre = "//PubmedArticle/PubmedData/History/"
+    tbl = xpathSApply(pub, paste0(pre, "PubMedPubDate[@PubStatus='medline']/Year"), xmlValue)
     tbl = table(tbl)[ table(tbl) > min ]
     data.frame(year = names(tbl), count = tbl)
   })
