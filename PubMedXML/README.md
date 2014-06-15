@@ -15,7 +15,7 @@ pubmed_years("pubmed_fctc")
 
 # HOWTO
 
-The workhorse function is `pubmed_get`. You might want to run it twice in a single spell to fix any network error during the batch download:
+The workhorse function is `pubmed_get`, to which you have to pass a Pubmed query and a filename. You might want to run it two consecutive times to fix any network error during the batch download:
 
 ```{S}
 query = "FCTC OR 'Framework Convention on Tobacco Control'"
@@ -23,9 +23,9 @@ for(ii in 1:2)
   try(pubmed_get(query, file = "fctc"))
 ```
 
-This will return the raw data to the `pubmed_fctc` folder, along with a download log `pubmed_fctc.log` that contains the full PubMed query.
+This will download XML records to the `pubmed_fctc` folder, along with the `pubmed_fctc.log` file that contains the initial PubMed query and various additional download details.
 
-Adding the `list = TRUE` runs through some aggregation functions and returns a list of data details, which can take some time to complete:
+Adding the `list = TRUE` runs through some aggregation functions and returns a list of data details, which can take quite some time to complete if you are scraping hundreds of files:
 
 * `date` — timestamp
 * `search` — the initial search string
@@ -37,7 +37,17 @@ Adding the `list = TRUE` runs through some aggregation functions and returns a l
 * `journals` — the number of articles per journal
 * `authors` — the number of authors per article
 
-# TODO
+There is one other aggregation function, `pubmed_timeline`, to get counts of articles by year and journal title. This graph shows top and selected journals from the FCTC example above:
 
-* protect `pubmed_names` against problematic records
-* journal-year count function
+![](example.png)
+
+```{S}
+FCTC = pubmed_timeline("pubmed_fctc", min = 0,
+                       regex = "World Health Org|BMJ $|Lancet|Tob Control")
+require(ggplot2)
+qplot(data = FCTC[ order(FCTC$label), ], x = year, y = count, fill = label,
+      stat = "identity", geom = "bar") +
+  scale_fill_brewer("Journal", palette = "Set3", na.value = "grey") +
+  labs(x = NULL, y = NULL) +
+  theme(legend.position = "bottom")
+```
