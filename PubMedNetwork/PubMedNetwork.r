@@ -12,7 +12,8 @@ library(stringr)
 #' @example
 #' # Names of authors for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
-#' # pubmed_names("pubmed_fctc", 6)
+#' # FCTC = pubmed_names("pubmed_fctc", 0, first = TRUE)
+#' # write.csv(FCTC, "pubmed_fctc_authors.csv", row.names = FALSE)
 pubmed_names <- function(dir, min = 0, first = FALSE) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
@@ -21,7 +22,6 @@ pubmed_names <- function(dir, min = 0, first = FALSE) {
     tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article")
     last = lapply(tbl, xpathSApply, "AuthorList/Author/LastName", xmlValue)
     init = lapply(tbl, xpathSApply, "AuthorList/Author/Initials", xmlValue)
-    stopifnot(length(unlist(last)) == length(unlist(init)))
     if(first)
       tbl = paste(unlist(last), substr(unlist(init), 1, 1))
     else
