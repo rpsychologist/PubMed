@@ -1,3 +1,9 @@
+library(RCurl)
+library(XML)
+library(plyr)
+library(reports) # capitalizing
+library(stringr)
+
 #' Get counts of authors (by name)
 #'
 #' @param min cut results at minimum number of articles
@@ -114,19 +120,21 @@ pubmed_edges <- function(dir) {
     pmid = xpathApply(x, paste0(pre, "PMID"), xmlValue)
     year = xpathApply(x, paste0(pre, "DateCreated/Year"), xmlValue)
     jrnl = xpathApply(x, paste0(pre, "MedlineJournalInfo/MedlineTA"), xmlValue)
+    lang = xpathApply(x, paste0(pre, "Article/Language"), xmlValue)
     
     x = xpathSApply(x, "//PubmedArticle/MedlineCitation")
-    x = sapply(x, function(x) {
-      tolower(paste0(xpathSApply(x, paste0(pre, "KeywordList/Keyword"), xmlValue), collapse = ";"))
+    x = lapply(x, function(x) {
+      paste0(xpathSApply(x, "KeywordList/Keyword", xmlValue), collapse = ";")
     })
 
     x = data.frame(
       pmid = unlist(pmid),
       year = unlist(year),
       jrnl = unlist(jrnl),
-      keywords = x
+      lang = unlist(lang),
+      keywords = unlist(x)
     )
-    names(x) = c("pmid", "year", "journal", "keywords")
+    names(x) = c("pmid", "year", "journal", "language", "keywords")
     
     cat(".")
     return(x)
@@ -134,7 +142,18 @@ pubmed_edges <- function(dir) {
   })
   
   data = rbind.fill(data)
+
+  data$journal = gsub("\\.|\\(|\\)", "", data$journal)
+  data$journal = str_trim(data$journal)
+  data$journal = tolower(data$journal)
+  data$journal = suppressWarnings(CA(data$journal))
+  data$journal[ grepl("Bmj|Bmj Open|Br Med J", data$journal) ] = "BMJ" # special case
+  
+  data$language = tolower(data$language)
+  data$keywords = tolower(data$keywords)
+
   write.csv(data, paste0(nfo, ".csv"), row.names = FALSE)
+  
   cat(" done.\n")
 
 }

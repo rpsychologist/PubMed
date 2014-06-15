@@ -1,6 +1,7 @@
 library(RCurl)
 library(XML)
 library(plyr)
+library(reports) # capitalizing
 library(stringr)
 
 #' Get a PubMed search index
@@ -184,6 +185,11 @@ pubmed_journals <- function(dir, min = 0) {
     data.frame(journal = names(tbl), count = as.vector(tbl))
   })
   tbl = rbind.fill(tbl)
+  tbl$journal = gsub("\\.|\\(|\\)", "", tbl$journal)
+  tbl$journal = str_trim(tbl$journal)
+  tbl$journal = tolower(tbl$journal)
+  tbl$journal = suppressWarnings(CA(tbl$journal))
+  tbl$journal[ grepl("Bmj|Bmj Open|Br Med J", tbl$journal) ] = "BMJ" # special case
   tbl = aggregate(count ~ journal, sum, data = tbl)
   tbl = subset(tbl, count >= min)
   return(tbl[ order(-tbl$count), ])
@@ -256,11 +262,13 @@ pubmed_authors <- function(dir, min = 0) {
 #' # FCTC = pubmed_timeline("pubmed_fctc", 0, regex = "World Health Org|BMJ $|Lancet|Tob Control")
 #' # Plot the results (not run).
 #' # require(ggplot2)
-#' # qplot(data = FCTC[ order(FCTC$label), ], x = year, y = count, fill = label,
-#' #       stat = "identity", geom = "bar") +
-#' #   scale_fill_brewer("Journal", palette = "Set3", na.value = "grey") +
-#' #   labs(x = NULL, y = NULL) +
-#' #   theme(legend.position = "bottom")
+#' #  qplot(data = subset(FCTC[ order(FCTC$label), ], !is.na(year)),
+#' #        x = factor(year), y = count, fill = label, color = I("white"),
+#' #        stat = "identity", geom = "bar") +
+#' #    scale_fill_brewer("Journal", palette = "Set3", na.value = "grey") +
+#' #    labs(x = NULL, y = NULL) +
+#' #    theme(legend.position = "bottom")
+#' #  ggsave("pubmed_fctc.png", width = 12, height= 6)
 pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
@@ -275,7 +283,12 @@ pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
   tbl = rbind.fill(tbl)
   tbl = aggregate(count ~ journal, sum, data = tbl)
   tbl = subset(tbl, count >= min)
-  tbl = data.frame(journal = str_sub(tbl$journal, 1, -5),
+  tbl$journal = gsub("\\.|\\(|\\)", "", tbl$journal)
+  tbl$journal = str_trim(tbl$journal)
+  tbl$journal = tolower(tbl$journal)
+  tbl$journal = suppressWarnings(CA(tbl$journal))
+  tbl$journal[ grepl("Bmj|Bmj Open|Br Med J", tbl$journal) ] = "BMJ" # special case
+  tbl = data.frame(journal = str_sub(tbl$journal, 1, -6),
                    year = str_sub(tbl$journal, -4, -1),
                    count = tbl$count)
   tbl$year = as.numeric(as.character(tbl$year))
@@ -283,7 +296,7 @@ pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
   if(top > 0) {
     
     # find top journals
-    label = aggregate(count ~ journal, sum, data = pt)
+    label = aggregate(count ~ journal, sum, data = tbl)
     label = as.character(label[ order(-label$count), 1 ])
     tbl$label = factor(tbl$journal, levels = label, ordered = TRUE)
     
