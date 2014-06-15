@@ -3,7 +3,14 @@
 
 # DEMO
 
-Following on the FCTC example from the `PubMedXML` functions:
+The main workhorse is the `pubmed_edges` function, which produces undirected, weighted edge lists of coauthors for each batch of PubMed XML records. The other product of the function is a CSV file that contains metadata for each article that has coauthors:
+
+* `pmid` — the PMID of the article
+* `journal` — abbreviated capitalized journal title, without punctuation
+* `language` — article language (three-letter code)
+* `keywords` — the keywords of the article (many articles have none)
+
+Back to the FCTC example from the `PubMedXML` functions:
 
 ```{S}
 require(ggplot2)
@@ -34,3 +41,5 @@ qplot(data = d[ order(d$language), ], x = year, y = count, color = I("white"),
 # save example
 ggsave("pubmed_fctc_lang.png", width = 12, height = 6)
 ```
+
+![](pubmed_fctc_lang.png)
