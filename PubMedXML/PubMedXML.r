@@ -5,6 +5,7 @@ library(stringr)
 
 #' Get a PubMed search index
 #' @param query a PubMed search string
+#' @return the XML declaration of the search
 #' @example
 #' # Which articles discuss the WHO FCTC?
 #' pubmed_ask("FCTC OR 'Framework Convention on Tobacco Control'")
@@ -50,17 +51,31 @@ pubmed_count <- function(query, max = 0) {
 
 }
 
-#' Search and fetch XML from PubMed
+#' Search and fetch XML records from PubMed
 #'
 #' @param query a PubMed search string
-#' @param file the batch file name
-#' @param max optional cap for the number of articles
-#' @param k how many articles per batch
-#' @example
-#' # Scrape approx. 230 articles on the WHO FCTC (not run)
-#' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
+#' @param file a string to name the batch files and folder (the "pubmed_" prefix will be appended)
+#' @param list optionally returns a list of details on the data (off by default)
+#' @param max optional cap for the number of articles (off by default)
+#' @param k how many articles per batch (1,000 by default)
+#' @examples
+#' query = "FCTC OR 'Framework Convention on Tobacco Control'"
+#' # Scrape approx. 230 articles on the WHO FCTC (not run).
+#' # pubmed_get(query, "fctc")
+#' # Scrape twice to fix possible network errors (not run).
+#' # for(ii in 1:2) try(pubmed_get(query, "fctc"))
+#' # Scrape safely and save data details (not run).
+#' # for(ii in 1:2) FCTC = try(pubmed_get(query, "fctc", list = TRUE))
+#' # Plot data details (not run).
+#' # require(ggplot2)
+#' # qplot(data = FCTC$years, x = year, y = count, stat = "identity", geom = "bar")
+#' # qplot(data = FCTC$authors, x = authors, y = count, stat = "identity", geom = "bar")
+#' # qplot(data = subset(FCTC$journals, count > 5),
+#' #       x = reorder(journal, count), y = count, stat = "identity", geom = "bar") + 
+#' #   labs(x = NULL) +
+#' #   coord_flip()
 #' @reference \url{http://rpsychologist.com/how-to-download-complete-xml-records-from-pubmed-and-extract-data}
-pubmed_get <- function(query, file, max = 0, k = 10^3) {
+pubmed_get <- function(query, file, list = FALSE, max = 0, k = 10^3) {
   
   stopifnot(max >= 0)
   dir = paste0("pubmed_", file)
@@ -76,10 +91,10 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
   sink(log)
   
   # change spaces to + and single-quotes to URL-friendly %22 in query
-  query = pubmed_ask(query)
+  q = pubmed_ask(query)
     
   # count number of hits
-  n = pubmed_count(query, max)
+  n = pubmed_count(q, max)
   
   # batch download counter
   j = 0
@@ -91,24 +106,32 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
   cat("Downloading", n, "articles in", r, "batch(es) of", k, "entries\n\n")
   
   # save WebEnv-string, containing "links" to all articles in search
-  query = xmlValue(query[["doc"]][["eSearchResult"]][["WebEnv"]])
+  q = xmlValue(q[["doc"]][["eSearchResult"]][["WebEnv"]])
   
   # batch download loop
   for(i in r:1) { 
     
     x = paste("http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&WebEnv=",
-              query,"&query_key=1&retmode=xml&retstart=", j, "&retmax=", k, sep = "")
+              q,"&query_key=1&retmode=xml&retstart=", j, "&retmax=", k, sep = "")
     
     y = paste0(file, str_pad(i, nchar(n), pad = "0"), ".xml")
     
     if(!file.exists(y)) {
       
       # download XML based on hits saved in query (WebEnv)
-      z = getURL(x)
+      z = try(getURL(x), silent = TRUE)
       
-      # write to batch data folder
-      write(z, y)
-      
+      if(!"try-error" %in% class(z)) {
+        
+        write(z, y) # save to batch data folder
+        
+      } else {
+        
+        warning("Error while downloading batch file #", i)
+        Sys.sleep(60) # wait a minute before looping
+
+      }
+            
     }
     
     # save file name and file size to log file
@@ -125,8 +148,21 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
   # announce final file size
   cat("Completed download from PubMed:", n, "articles",
       as.integer(sum(file.info(file.path(dir, dir(dir, "xml")))$size) / 10^6),
-      "MB")  
+      "MB.\n")
   
+  if(list)
+    return(list(
+      date = Sys.time(),
+      search = query,
+      dir = dir,
+      log = log,
+      ncid = q,
+      count = n,
+      years    = pubmed_years(dir, 0),
+      journals = pubmed_journals(dir, 0),
+      authors  = pubmed_authors(dir, 0)
+    ))
+
 }
 
 #' Get journal titles
@@ -137,19 +173,19 @@ pubmed_get <- function(query, file, max = 0, k = 10^3) {
 #' # Journal titles for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
 #' # pubmed_journals("pubmed_fctc")
-pubmed_journals <- function(dir, min = 3) {
+pubmed_journals <- function(dir, min = 0) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/MedlineCitation/Article/"
     tbl = xpathSApply(pub, paste0(pre, "Journal/ISOAbbreviation"), xmlValue)
-    tbl = table(tbl)[ table(tbl) >= min ]
-    data.frame(journal = names(tbl), count = tbl)
+    tbl = table(tbl)
+    data.frame(journal = names(tbl), count = as.vector(tbl))
   })
-  print(tbl)
   tbl = rbind.fill(tbl)
   tbl = aggregate(count ~ journal, sum, data = tbl)
+  tbl = subset(tbl, count >= min)
   return(tbl[ order(-tbl$count), ])
   
 }
@@ -157,7 +193,7 @@ pubmed_journals <- function(dir, min = 3) {
 #' Get years of publication
 #'
 #' @param min cut results at minimum number of articles
-#' @return a data frame
+#' @return a data frame, ordered by year
 #' @example
 #' # Years of publication for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
@@ -169,11 +205,15 @@ pubmed_years <- function(dir, min = 0) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
     pre = "//PubmedArticle/PubmedData/History/"
     tbl = xpathSApply(pub, paste0(pre, "PubMedPubDate[@PubStatus='medline']/Year"), xmlValue)
-    tbl = table(tbl)[ table(tbl) >= min ]
-    data.frame(year = names(tbl), count = tbl)
+    tbl = table(tbl)
+    data.frame(year = names(tbl), count = as.vector(tbl))
   })
   tbl = rbind.fill(tbl)
-  return(aggregate(count ~ year, sum, data = tbl))
+  tbl = aggregate(count ~ year, sum, data = tbl)
+  tbl = subset(tbl, count >= min)
+  tbl$year = as.numeric(as.character(tbl$year))
+  tbl$year = factor(tbl$year, levels = min(tbl$year):max(tbl$year))
+  return(tbl[ order(sort(-as.numeric(tbl$year))), ])
   
 }
 
@@ -193,101 +233,67 @@ pubmed_authors <- function(dir, min = 0) {
     tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article")
     tbl = lapply(tbl, xpathApply, "AuthorList/Author/LastName")
     tbl = as.vector(sapply(tbl, length))
-    tbl = table(tbl)[ table(tbl) >= min ]
-    data.frame(authors = names(tbl), count = tbl, stringsAsFactors = FALSE)
+    tbl = table(tbl)
+    data.frame(authors = names(tbl), count = as.vector(tbl), stringsAsFactors = FALSE)
   })
   tbl = rbind.fill(tbl)
   tbl = aggregate(count ~ authors, sum, data = tbl)
+  tbl = subset(tbl, count >= min)
   tbl$authors = factor(tbl$authors, levels = 0:max(as.numeric(tbl$authors)))
-  return(tbl[ order(tbl$authors), ])
+  return(tbl[ order(as.numeric(tbl$authors)), ])
   
 }
 
-#' Get counts of authors (by name)
+#' Get number of publications per journal and year
 #'
 #' @param min cut results at minimum number of articles
-#' @return a data frame
+#' @param top label top n journals (5 by default)
+#' @param regex regular expression to include additional journal titles
+#' @return a data frame, ordered by journal-year
 #' @example
-#' # Names of authors for articles on the WHO FCTC (not run).
+#' # Years of publication for articles on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
-#' # pubmed_names("pubmed_fctc", 6)
-pubmed_names <- function(dir, min = 0) {
+#' # FCTC = pubmed_timeline("pubmed_fctc", 0, regex = "World Health Org|BMJ $|Lancet|Tob Control")
+#' # Plot the results (not run).
+#' # require(ggplot2)
+#' # qplot(data = FCTC[ order(FCTC$label), ], x = year, y = count, fill = label,
+#' #       stat = "identity", geom = "bar") +
+#' #   scale_fill_brewer("Journal", palette = "Set3", na.value = "grey") +
+#' #   labs(x = NULL) +
+#' #   theme(legend.position = "bottom")
+pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
-    tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article")
-    last = lapply(tbl, xpathSApply, "AuthorList/Author/LastName", xmlValue)
-    init = lapply(tbl, xpathSApply, "AuthorList/Author/Initials", xmlValue)
-    stopifnot(length(unlist(last)) == length(unlist(init)))
-    tbl = paste(unlist(last), substr(unlist(init), 1, 1))
-    tbl = table(tbl)[ table(tbl) >= min ]
-    data.frame(author = names(tbl), count = tbl, stringsAsFactors = FALSE)
+    jl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article/Journal/ISOAbbreviation", xmlValue)
+    yr = xpathSApply(pub, "//PubmedArticle/PubmedData/History/PubMedPubDate[@PubStatus='medline']/Year", xmlValue)
+    tbl = table(paste(jl, yr))
+    data.frame(journal = names(tbl), count = as.vector(tbl))
   })
   tbl = rbind.fill(tbl)
-  tbl = aggregate(count ~ author, sum, data = tbl)
-  return(tbl[ order(-tbl$count), ])
+  tbl = aggregate(count ~ journal, sum, data = tbl)
+  tbl = subset(tbl, count >= min)
+  tbl = data.frame(journal = str_sub(tbl$journal, 1, -5),
+                   year = str_sub(tbl$journal, -4, -1),
+                   count = tbl$count)
+  tbl$year = as.numeric(as.character(tbl$year))
+  
+  if(top > 0) {
+    
+    # find top journals
+    label = aggregate(count ~ journal, sum, data = pt)
+    label = as.character(label[ order(-label$count), 1 ])
+    tbl$label = factor(tbl$journal, levels = label, ordered = TRUE)
+    
+    # trim and refactor
+    label = head(levels(tbl$label), top)
+    if(!is.null(regex))
+      label = c(label, levels(tbl$label)[ grepl(regex, levels(tbl$label)) ])
+    print(label)
+    tbl$label[ !tbl$label %in% label ] = NA
+    
+  }
+  return(tbl[ order(sort(-tbl$year)), ])
   
 }
-
-#' Get undirected edge list of coauthors
-#'
-#' The weights are Newman-Fowler (inversely proportional to number of coauthors).
-#' @return a data frame with three columns (sender, receiver, weight)
-#' @example
-#' # # Network of authors on the WHO FCTC (not run).
-#' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
-#' # n = pubmed_edges("pubmed_fctc")
-#' 
-#' # # Plot with network package (install first; not run).
-#' # require(network)
-#' # plot(network(n[ 1:2 ], directed = FALSE))
-#' 
-#' # # Plot with ggnet (install devtools package first; not run).
-#' 
-#' # net = network(n[, 1:2])
-#' # net %e% "w" = n[, 3] / max(n[ , 3])
-#' # net %e% "q" = as.numeric(cut(net %e% "w", quantile(net %e% "w"), include.lowest = TRUE)) / 4
-#' # require(devtools)
-#' # source_url("https://raw.githubusercontent.com/briatte/ggnet/master/ggnet.R")
-#' # ggnet(net, segment.alpha = net %e% "q",
-#' #       segment.color = "black", size = 1) + 
-#' #   geom_text(label = ifelse(degree(net) > quantile(degree(net), .9),
-#' #                            network.vertex.names(net), NA), size = 4)
-pubmed_edges <- function(dir) {
-  
-  tbl = file.path(dir, dir(dir, ".xml"))
-  tbl = lapply(tbl, function(x) {
-    pub = xmlTreeParse(x, useInternalNodes = TRUE)
-    tbl = xpathSApply(pub, "//PubmedArticle/MedlineCitation")
-    tbl = lapply(tbl, function(x) {
-      y = paste(xpathSApply(x, "Article/AuthorList/Author/LastName", xmlValue),
-                xpathSApply(x, "Article/AuthorList/Author/Initials", xmlValue))
-      if(length(y) > 1) {
-        y = expand.grid(y, y)
-        y = subset(y, Var1 != Var2) # self-loops
-        y = unique(apply(y, 1, function(x) paste(sort(x), collapse = ",")))
-        y = ldply(strsplit(y, ","))
-        y = data.frame(xpathApply(x, "PMID", xmlValue), y, 1 / nrow(y))
-        names(y) = c("pmid", "i", "j", "w")
-      } else {
-        y = data.frame()
-      }
-      return(y)
-    })
-    tbl = rbind.fill(tbl)
-    write.csv(tbl, gsub("xml", "csv", x))
-    return(tbl)
-  })
-  tbl = rbind.fill(tbl)
-  tbl$uid = apply(tbl[, 2:3], 1, function(x) paste(sort(x), collapse = ","))
-  
-  # Newman-Fowler weights
-  tbl = merge(tbl, aggregate(w ~ uid, sum, data = tbl), by = "uid")
-  tbl = unique(tbl[, c("i", "j", "w.y") ])
-  names(tbl)[3] = "w"
-
-  return(tbl)
-  
-}
-
