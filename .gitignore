@@ -7,5 +7,6 @@
 # personal work files
 
 pubmed_*
+!pubmed_*.png
 *copy.r
 
