@@ -259,15 +259,16 @@ pubmed_authors <- function(dir, min = 0) {
 #' # qplot(data = FCTC[ order(FCTC$label), ], x = year, y = count, fill = label,
 #' #       stat = "identity", geom = "bar") +
 #' #   scale_fill_brewer("Journal", palette = "Set3", na.value = "grey") +
-#' #   labs(x = NULL) +
+#' #   labs(x = NULL, y = NULL) +
 #' #   theme(legend.position = "bottom")
 pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
   
   tbl = file.path(dir, dir(dir, ".xml"))
   tbl = lapply(tbl, function(x) {
     pub = xmlTreeParse(x, useInternalNodes = TRUE)
-    jl = xpathSApply(pub, "//PubmedArticle/MedlineCitation/Article/Journal/ISOAbbreviation", xmlValue)
-    yr = xpathSApply(pub, "//PubmedArticle/PubmedData/History/PubMedPubDate[@PubStatus='medline']/Year", xmlValue)
+    pre = "//PubmedArticle/MedlineCitation/"
+    jl = xpathSApply(pub, paste0(pre, "Article/Journal/ISOAbbreviation"), xmlValue)
+    yr = xpathSApply(pub, paste0(pre, "DateCreated/Year"), xmlValue)
     tbl = table(paste(jl, yr))
     data.frame(journal = names(tbl), count = as.vector(tbl))
   })
@@ -290,7 +291,7 @@ pubmed_timeline <- function(dir, min = 0, top = 3, regex = NULL) {
     label = head(levels(tbl$label), top)
     if(!is.null(regex))
       label = c(label, levels(tbl$label)[ grepl(regex, levels(tbl$label)) ])
-    print(label)
+    cat("Labeled journals:\n", paste0(label, collapse = ", "))
     tbl$label[ !tbl$label %in% label ] = NA
     
   }

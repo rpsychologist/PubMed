@@ -36,7 +36,8 @@ pubmed_names <- function(dir, min = 0, first = FALSE) {
 #' \textbf{Caution:} this function requires inordinate amounts of disk space to
 #' complete on large corpora (something like 4GB is recommended for a corpus of
 #' 200,000 articles).
-#' @return a data frame with three columns (sender, receiver, weight)
+#' @param dir the folder containing the XML records
+#' @return a CSV file with article information, and as many CSV edge lists as there are batch XML records.
 #' @example
 #' # # Network of authors on the WHO FCTC (not run).
 #' # pubmed_get("FCTC OR 'Framework Convention on Tobacco Control'", "fctc")
@@ -56,6 +57,7 @@ pubmed_names <- function(dir, min = 0, first = FALSE) {
 #' #                            network.vertex.names(net), NA), size = 4)
 pubmed_edges <- function(dir) {
   
+  nfo = dir
   dir = file.path(dir, dir(dir, ".xml"))
   get = dir[ !file.exists(gsub("xml", "csv", dir)) ]
 
@@ -78,7 +80,10 @@ pubmed_edges <- function(dir) {
         y = subset(y, Var1 != Var2) # self-loops
         y = unique(apply(y, 1, function(x) paste(sort(x), collapse = ",")))
         y = ldply(strsplit(y, ","))
-        y = data.frame(xpathApply(x, "PMID", xmlValue), y, 1 / nrow(y))
+        
+        pmid = xpathApply(x, "PMID", xmlValue)
+        
+        y = data.frame(pmid, y, 1 / nrow(y))
         names(y) = c("pmid", "i", "j", "w")
         
       } else {
@@ -93,12 +98,43 @@ pubmed_edges <- function(dir) {
     
     pub = rbind.fill(pub)
     write.csv(pub, gsub("xml", "csv", x))
-        
+    
   }
   
   dir = gsub("xml", "csv", dir)
   cat(" done:", sum(file.exists(dir)), "edge lists,",
       as.integer(sum(file.info(dir)$size) / 10^6),
-      "MB.")
+      "MB.\nExtracting article details")
+  
+  data = lapply(gsub("csv", "xml", dir), function(x) {
+        
+    x = xmlTreeParse(x, useInternalNodes = TRUE)
+    pre = "//PubmedArticle/MedlineCitation/"
+    
+    pmid = xpathApply(x, paste0(pre, "PMID"), xmlValue)
+    year = xpathApply(x, paste0(pre, "DateCreated/Year"), xmlValue)
+    jrnl = xpathApply(x, paste0(pre, "MedlineJournalInfo/MedlineTA"), xmlValue)
+    
+    x = xpathSApply(x, "//PubmedArticle/MedlineCitation")
+    x = sapply(x, function(x) {
+      tolower(paste0(xpathSApply(x, paste0(pre, "KeywordList/Keyword"), xmlValue), collapse = ";"))
+    })
+
+    x = data.frame(
+      pmid = unlist(pmid),
+      year = unlist(year),
+      jrnl = unlist(jrnl),
+      keywords = x
+    )
+    names(x) = c("pmid", "year", "journal", "keywords")
+    
+    cat(".")
+    return(x)
+    
+  })
+  
+  data = rbind.fill(data)
+  write.csv(data, paste0(nfo, ".csv"), row.names = FALSE)
+  cat(" done.\n")
 
 }
