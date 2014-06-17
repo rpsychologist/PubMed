@@ -152,8 +152,12 @@ pubmed_edges <- function(dir) {
   data$language = tolower(data$language)
   data$keywords = tolower(data$keywords)
 
-  write.csv(data, paste0(nfo, ".csv"), row.names = FALSE)
+  write.csv(data, paste0(nfo, "_articles.csv"), row.names = FALSE)
   
   cat(" done.\n")
+  
+  if(!file.exists(paste0(nfo, "_authors.csv")))
+    write.csv(pubmed_names(nfo, 0, first = FALSE),
+              "pubmed_fctc_authors.csv", row.names = FALSE)  
 
 }
