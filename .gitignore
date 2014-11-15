@@ -1,0 +1,12 @@
+# R project files
+
+*.Rproj
+*.Rproj.*
+.Rproj.user
+
+# personal work files
+
+pubmed_*
+!pubmed_*.png
+*copy.r
+
