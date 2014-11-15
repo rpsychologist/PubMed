@@ -17,7 +17,7 @@ require(ggplot2)
 pubmed_edges("pubmed_fctc")
 
 # read article information
-d = read.csv('pubmed_fctc.csv')
+d = read.csv('pubmed_fctc_articles.csv')
 d$uid = paste(d$journal, d$language, d$year)
 d = as.data.frame(table(d$uid))
 d = data.frame(journal = str_sub(d$Var1, 1, -10),
